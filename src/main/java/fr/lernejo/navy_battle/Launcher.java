@@ -29,7 +29,7 @@ public class Launcher {
         } catch (NumberFormatException e) {
             System.err.println("Invalid port number: " + args[0]);
             System.exit(1);
-            return; // Avoid compilation warnings
+            return; 
         }
 
         String adversaryUrl = args.length > 1 ? args[1] : null;
@@ -38,7 +38,7 @@ public class Launcher {
             HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
 
             server.createContext("/ping", new PingHandler());
-            server.createContext("/api/game/start", new StartHandler(port));
+            server.createContext("/api/game/start", new StartHandler(port, adversaryUrl));
             server.createContext("/api/game/fire", new FireHandler());
 
             ExecutorService executor = Executors.newFixedThreadPool(1);
@@ -83,9 +83,8 @@ public class Launcher {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if ("GET".equals(exchange.getRequestMethod())) {
-                String response = "{\"status\": \"OK\"}";
-                exchange.getResponseHeaders().set("Content-Type", "application/json");
-                exchange.sendResponseHeaders(200, response.getBytes().length);
+                String response = "OK";
+                exchange.sendResponseHeaders(200, response.length());
                 try (OutputStream os = exchange.getResponseBody()) {
                     os.write(response.getBytes());
                 }
@@ -97,9 +96,11 @@ public class Launcher {
 
     static class StartHandler implements HttpHandler {
         private final int port;
+        private final String adversaryUrl;
 
-        StartHandler(int port) {
+        StartHandler(int port, String adversaryUrl) {
             this.port = port;
+            this.adversaryUrl = adversaryUrl;
         }
 
         @Override
@@ -115,6 +116,10 @@ public class Launcher {
                     try (OutputStream os = exchange.getResponseBody()) {
                         os.write(response.getBytes());
                     }
+                    if (adversaryUrl != null) {
+                        sendFireRequest(adversaryUrl, "A1");
+                    }
+
                 } catch (Exception e) {
                     exchange.sendResponseHeaders(400, -1);
                 }
@@ -122,6 +127,26 @@ public class Launcher {
             } else {
                 exchange.sendResponseHeaders(405, -1);
             }
+        }
+
+        private void sendFireRequest(String adversaryUrl, String cell) {
+            HttpClient client = HttpClient.newHttpClient();
+            String fireUrl = adversaryUrl + "/api/game/fire?cell=" + cell;
+
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(fireUrl))
+                .header("Accept", "application/json")
+                .GET()
+                .build();
+
+            client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenAccept(response -> {
+                    System.out.println("Fire response: " + response.body());
+                })
+                .exceptionally(e -> {
+                    System.err.println("Failed to send fire request: " + e.getMessage());
+                    return null;
+                });
         }
     }
 
