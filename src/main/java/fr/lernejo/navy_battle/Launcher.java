@@ -7,34 +7,23 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class Launcher {
-
     public static void main(String[] args) {
         if (args.length < 1) {
-            printUsageAndExit();
+            System.err.println("Usage: java Launcher <port> [<adversary_url>]");
+            System.exit(1);
         }
 
-        int port = parsePort(args[0]);
+        int port;
+        try {
+            port = Integer.parseInt(args[0]);
+        } catch (NumberFormatException e) {
+            System.err.println("Invalid port number: " + args[0]);
+            System.exit(1);
+            return;
+        }
+
         String adversaryUrl = args.length > 1 ? args[1] : null;
 
-        startServer(port, adversaryUrl);
-    }
-
-    private static void printUsageAndExit() {
-        System.err.println("Usage: java Launcher <port> [<adversary_url>]");
-        System.exit(1);
-    }
-
-    private static int parsePort(String portArg) {
-        try {
-            return Integer.parseInt(portArg);
-        } catch (NumberFormatException e) {
-            System.err.println("Invalid port number: " + portArg);
-            System.exit(1);
-            return -1; 
-        }
-    }
-
-    private static void startServer(int port, String adversaryUrl) {
         try {
             HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
             server.createContext("/ping", new PingHandler());
@@ -43,12 +32,18 @@ public class Launcher {
 
             ExecutorService executor = Executors.newFixedThreadPool(1);
             server.setExecutor(executor);
-            server.start();
 
+            server.start();
             System.out.println("Server started on port " + port);
+
+            if (adversaryUrl != null) {
+                StartHandler.sendStartRequest(port, adversaryUrl);
+            }
+
         } catch (IOException e) {
             System.err.println("Failed to start server: " + e.getMessage());
             e.printStackTrace();
         }
     }
 }
+
